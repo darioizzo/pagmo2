@@ -24,14 +24,10 @@ jobs:
             runner: ubuntu-22.04-arm
             with_optional: OFF
             conda_pkgs: c-compiler cxx-compiler cmake ninja boost-cpp tbb tbb-devel eigen
-          - label: macos-x64
-            runner: macos-13
+          - label: macos-arm64
+            runner: macos-latest
             with_optional: ON
             conda_pkgs: c-compiler cxx-compiler libcxx cmake ninja boost-cpp tbb tbb-devel eigen nlopt ipopt
-          - label: macos-arm64
-            runner: macos-14
-            with_optional: OFF
-            conda_pkgs: c-compiler cxx-compiler libcxx cmake ninja boost-cpp tbb tbb-devel eigen
     steps:
       - uses: actions/checkout@v4
       - uses: conda-incubator/setup-miniconda@v3
@@ -139,7 +135,7 @@ jobs:
         shell: bash
         run: |
           set -e
-          conda create -y -q -p "$HOME/local" c-compiler cxx-compiler cmake ninja boost-cpp tbb tbb-devel eigen nlopt ipopt
+          conda create -y -q -p "$HOME/local" c-compiler cxx-compiler cmake ninja boost-cpp tbb tbb-devel eigen nlopt ipopt lcov
           conda run -p "$HOME/local" cmake -S . -B build -G Ninja \
             -DCMAKE_PREFIX_PATH="$HOME/local" \
             -DCMAKE_BUILD_TYPE=Debug \
@@ -149,13 +145,32 @@ jobs:
             -DPAGMO_WITH_NLOPT=ON \
             -DPAGMO_WITH_IPOPT=ON \
             -DPAGMO_ENABLE_IPO=ON \
-            -DCMAKE_CXX_FLAGS="--coverage"
+            -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           conda run -p "$HOME/local" cmake --build build --parallel
           # Coverage mode keeps torture tests disabled to contain runtime.
           conda run -p "$HOME/local" ctest --test-dir build -VV --output-on-failure -j4 -E torture
+      - name: Generate lcov report
+        shell: bash
+        run: |
+          set -e
+          GCOV="$HOME/local/bin/gcov"
+          conda run -p "$HOME/local" lcov \
+            --gcov-tool "$GCOV" \
+            --capture \
+            --directory build \
+            --output-file lcov.info \
+            --no-external \
+            --ignore-errors mismatch
+          conda run -p "$HOME/local" lcov \
+            --remove lcov.info \
+            '*/tests/*' '*/tutorials/*' \
+            '*/cec2013_data.cpp' '*/cec2014_data.cpp' \
+            --output-file lcov.info
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
+          files: lcov.info
           fail_ci_if_error: true
           verbose: true
 
@@ -196,13 +211,7 @@ jobs:
         run: |
           set -e
           cd doc/doxygen
-          DOXYGEN_ERR=$(conda run -p "$HOME/local" doxygen 2>&1 1>/dev/null)
-          if [[ -n "$DOXYGEN_ERR" ]]; then
-            echo "Doxygen encountered problems:"
-            echo "$DOXYGEN_ERR"
-            exit 1
-          fi
-          echo "Doxygen ran successfully"
+          conda run -p "$HOME/local" doxygen
           cp images/* xml/
       - name: Build Sphinx docs
         shell: bash
