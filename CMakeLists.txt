@@ -1,8 +1,13 @@
 # CMake version check.
-cmake_minimum_required(VERSION 3.13)
+cmake_minimum_required(VERSION 3.20)
 # NOTE: policy for using the CheckIPOSupported module:
 # https://cmake.org/cmake/help/latest/policy/CMP0069.html
 cmake_policy(SET CMP0069 NEW)
+if(POLICY CMP0167)
+    # Keep FindBoost fallback for users that do not ship
+    # BoostConfig.cmake.
+    cmake_policy(SET CMP0167 OLD)
+endif()
 
 # Set default build type to "Release".
 # NOTE: this should be done before the project command since the latter can set
@@ -164,18 +169,8 @@ if (YACMA_COMPILER_IS_CLANGXX AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQU
     unset (_PAGMO_CLANG_SUPPORTS_ASSUME_UNIQUE_VTABLES)
 endif ()
 
-# TBB. Try to find it first in config mode (supported
-# since version 2021 after the oneTBB rename), and, if this
-# fails, fall back to our own FindTBB.cmake. This is of course
-# not an ideal solution, but it should work until oneTBB
-# becomes widely deployed.
-find_package(TBB QUIET CONFIG)
-if(NOT TBB_FOUND)
-    message(STATUS "TBB not found using config mode, retrying in module mode.")
-    find_package(TBB REQUIRED MODULE)
-else()
-    message(STATUS "TBB found using config mode.")
-endif()
+# TBB.
+find_package(TBB REQUIRED CONFIG)
 
 # Eigen3
 if(PAGMO_WITH_EIGEN3)
@@ -192,14 +187,14 @@ if(PAGMO_WITH_IPOPT)
     find_package(pagmo_IPOPT REQUIRED COMPONENTS header libipopt)
 endif()
 
+set(_PAGMO_REQUIRED_BOOST_COMPONENTS serialization)
 if(PAGMO_BUILD_TESTS)
-    # Internal variable that will be used to tell PagmoFindBoost to locate the
-    # Boost unit test framework, if tests are required.
-    set(_PAGMO_FIND_BOOST_UNIT_TEST_FRAMEWORK TRUE)
+    list(APPEND _PAGMO_REQUIRED_BOOST_COMPONENTS unit_test_framework)
 endif()
 
 # Boost setup.
-include(PagmoFindBoost)
+find_package(Boost 1.68.0 REQUIRED COMPONENTS ${_PAGMO_REQUIRED_BOOST_COMPONENTS})
+unset(_PAGMO_REQUIRED_BOOST_COMPONENTS)
 
 # List of source files.
 set(PAGMO_SRC_FILES
@@ -481,7 +476,7 @@ endif()
 
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/pagmo-config.cmake.in" "${CMAKE_CURRENT_BINARY_DIR}/pagmo-config.cmake" @ONLY)
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/pagmo-config.cmake" DESTINATION "${PAGMO_INSTALL_LIBDIR}/cmake/pagmo")
-install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/Findpagmo_IPOPT.cmake" "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/PagmoFindBoost.cmake"
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/Findpagmo_IPOPT.cmake"
     DESTINATION "${PAGMO_INSTALL_LIBDIR}/cmake/pagmo")
 install(EXPORT pagmo_export NAMESPACE Pagmo:: DESTINATION "${PAGMO_INSTALL_LIBDIR}/cmake/pagmo")
 # Take care of versioning.
