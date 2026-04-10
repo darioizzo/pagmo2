@@ -127,8 +127,9 @@ jobs:
             -DPAGMO_WITH_EIGEN3=ON \
             -DPAGMO_WITH_NLOPT=ON \
             -DPAGMO_WITH_IPOPT=ON \
-            -DPAGMO_ENABLE_IPO=ON \
+            -DPAGMO_ENABLE_IPO=OFF \
             -DCMAKE_CXX_FLAGS="--coverage" \
+            -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
             -DCMAKE_EXE_LINKER_FLAGS="--coverage"
           conda run -p "$HOME/local" cmake --build build --parallel
           conda run -p "$HOME/local" ctest --test-dir build -VV --output-on-failure -j4 -E torture
@@ -136,13 +137,16 @@ jobs:
         shell: bash
         run: |
           set -e
-          GCOV="$HOME/local/bin/gcov"
+          GCOV=$(conda run -p "$HOME/local" bash -lc 'command -v gcov || command -v x86_64-conda-linux-gnu-gcov || command -v aarch64-conda-linux-gnu-gcov')
+          echo "Using gcov tool: $GCOV"
           conda run -p "$HOME/local" lcov \
             --gcov-tool "$GCOV" \
             --capture \
             --directory build \
             --output-file lcov.info \
             --no-external
+          # Fail fast if lcov did not collect any project source file.
+          test "$(grep -c '^SF:' lcov.info || true)" -gt 0
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
