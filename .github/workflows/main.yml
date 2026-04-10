@@ -92,7 +92,9 @@ jobs:
         run: conda run -p $env:USERPROFILE\local cmake --build build --config Release --parallel
       - name: Test
         shell: powershell
-        run: conda run -p $env:USERPROFILE\local ctest --test-dir build -VV --output-on-failure -j4 -C Release
+        run: |
+          $env:PATH = "$PWD\build\Release;$env:USERPROFILE\local\Library\bin;$env:USERPROFILE\local\bin;$env:PATH"
+          ctest --test-dir build -VV --output-on-failure -j4 -C Release
 
   linux_release_coverage_docs:
     name: Linux release + coverage + docs${{ github.event_name == 'push' && github.ref == 'refs/heads/master' && ' and deploy' || '' }}
