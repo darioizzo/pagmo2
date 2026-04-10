@@ -9,7 +9,11 @@ include(CMakeFindDependencyMacro)
 find_dependency(Threads)
 find_dependency(TBB CONFIG)
 find_dependency(Boost 1.68.0 COMPONENTS serialization)
+set(_PAGMO_CONFIG_OLD_MODULE_PATH "${CMAKE_MODULE_PATH}")
+list(APPEND CMAKE_MODULE_PATH "${_PAGMO_CONFIG_SELF_DIR}")
 @_PAGMO_CONFIG_OPTIONAL_DEPS@
+set(CMAKE_MODULE_PATH "${_PAGMO_CONFIG_OLD_MODULE_PATH}")
+unset(_PAGMO_CONFIG_OLD_MODULE_PATH)
 
 include(${_PAGMO_CONFIG_SELF_DIR}/pagmo_export.cmake)
 
