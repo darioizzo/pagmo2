@@ -137,13 +137,14 @@ jobs:
         shell: bash
         run: |
           set -e
-          # Debug: show conda env bin and gcov candidates
-          conda run -p "$HOME/local" bash -lc 'echo CONDA_PREFIX=$CONDA_PREFIX; echo PATH=$PATH; ls -la "$CONDA_PREFIX/bin" | grep gcov || true; which -a gcov || true'
-          GCOV=$(conda run -p "$HOME/local" bash -lc 'command -v x86_64-conda-linux-gnu-gcov || command -v aarch64-conda-linux-gnu-gcov || command -v gcov')
+          # Use the gcov that matches the compiler used during the build.
+          CXX=$(grep '^CMAKE_CXX_COMPILER:FILEPATH=' build/CMakeCache.txt | cut -d= -f2-)
+          test -n "$CXX"
+          GCOV=$("$CXX" -print-prog-name=gcov)
+          test -n "$GCOV"
+          test -x "$GCOV"
           echo "Using gcov tool: $GCOV"
-          if [ -n "$GCOV" ]; then
-            "$GCOV" --version || true
-          fi
+          "$GCOV" --version
           conda run -p "$HOME/local" lcov \
             --gcov-tool "$GCOV" \
             --capture \
