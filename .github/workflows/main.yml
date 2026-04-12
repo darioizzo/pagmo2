@@ -137,8 +137,12 @@ jobs:
         shell: bash
         run: |
           set -e
-          GCOV=$(conda run -p "$HOME/local" bash -lc 'command -v gcov || command -v x86_64-conda-linux-gnu-gcov || command -v aarch64-conda-linux-gnu-gcov')
+          GCOV=$(conda run -p "$HOME/local" bash -lc 'command -v x86_64-conda-linux-gnu-gcov || command -v aarch64-conda-linux-gnu-gcov || command -v gcov')
           echo "Using gcov tool: $GCOV"
+          # Print gcov version to help debugging mismatch issues
+          if [ -n "$GCOV" ]; then
+            "$GCOV" --version || true
+          fi
           conda run -p "$HOME/local" lcov \
             --gcov-tool "$GCOV" \
             --capture \
