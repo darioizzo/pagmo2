@@ -108,68 +108,25 @@ jobs:
           auto-update-conda: true
           channels: conda-forge
           channel-priority: strict
-      - name: Install dependencies
+      - name: Build, test, coverage and docs
         shell: bash
-        run: |
-          set -e
-          conda create -y -q -p "$HOME/local" \
-            c-compiler cxx-compiler cmake ninja boost-cpp tbb tbb-devel eigen nlopt ipopt \
-            python=3.10 sphinx=4.5.0 sphinx-book-theme breathe "doxygen<1.13" graphviz lcov
-      - name: Build and test (coverage, no torture)
-        shell: bash
-        run: |
-          set -e
-          conda run -p "$HOME/local" cmake -S . -B build -G Ninja \
-            -DCMAKE_PREFIX_PATH="$HOME/local" \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DBoost_NO_BOOST_CMAKE=ON \
-            -DPAGMO_BUILD_TESTS=ON \
-            -DPAGMO_WITH_EIGEN3=ON \
-            -DPAGMO_WITH_NLOPT=ON \
-            -DPAGMO_WITH_IPOPT=ON \
-            -DPAGMO_ENABLE_IPO=OFF \
-            -DCMAKE_CXX_FLAGS="--coverage" \
-            -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
-            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
-          conda run -p "$HOME/local" cmake --build build --parallel
-          conda run -p "$HOME/local" ctest --test-dir build -VV --output-on-failure -j4 -E torture
-      - name: Generate coverage
-        shell: bash
-        run: |
-          set -e
-          GCOV=$(conda run -p "$HOME/local" bash -lc 'command -v gcov || command -v x86_64-conda-linux-gnu-gcov || command -v aarch64-conda-linux-gnu-gcov')
-          echo "Using gcov tool: $GCOV"
-          conda run -p "$HOME/local" lcov \
-            --gcov-tool "$GCOV" \
-            --capture \
-            --directory build \
-            --output-file lcov.info \
-            --no-external
-          # Fail fast if lcov did not collect any project source file.
-          test "$(grep -c '^SF:' lcov.info || true)" -gt 0
+        run: bash tools/gha_conda_coverage_docs.sh
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
-          files: lcov.info
+          files: ./build/coverage.info
+          disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
           verbose: true
-      - name: Build Doxygen XML
-        shell: bash
-        run: |
-          set -e
-          cd doc/doxygen
-          conda run -p "$HOME/local" doxygen
-          cp images/* xml/
-      - name: Build Sphinx docs
-        shell: bash
-        run: |
-          set -e
-          cd doc/sphinx
-          conda run -p "$HOME/local" make html
-          if ! conda run -p "$HOME/local" make linkcheck; then
-            echo "Warning: Sphinx linkcheck failed (likely transient external outage); continuing."
-          fi
+      - name: Upload coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-reports
+          path: |
+            build/coverage.info
+          if-no-files-found: warn
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: JamesIves/github-pages-deploy-action@v4
