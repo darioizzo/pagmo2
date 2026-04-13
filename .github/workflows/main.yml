@@ -108,74 +108,13 @@ jobs:
           auto-update-conda: true
           channels: conda-forge
           channel-priority: strict
-      - name: Install dependencies
+      - name: Build, test, coverage and docs
         shell: bash
-        run: |
-          set -e
-          conda create -y -q -p "$HOME/local" \
-            c-compiler cxx-compiler gcc_linux-64 cmake ninja boost-cpp tbb tbb-devel eigen nlopt ipopt \
-            python=3.10 sphinx=4.5.0 sphinx-book-theme breathe "doxygen<1.13" graphviz gcovr
-      - name: Build and test (coverage, no torture)
-        shell: bash
-        run: |
-          set -e
-          conda run -p "$HOME/local" cmake -S . -B build -G Ninja \
-            -DCMAKE_PREFIX_PATH="$HOME/local" \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DBoost_NO_BOOST_CMAKE=ON \
-            -DPAGMO_BUILD_TESTS=ON \
-            -DPAGMO_WITH_EIGEN3=ON \
-            -DPAGMO_WITH_NLOPT=ON \
-            -DPAGMO_WITH_IPOPT=ON \
-            -DPAGMO_ENABLE_IPO=OFF \
-            -DCMAKE_CXX_FLAGS="--coverage" \
-            -DCMAKE_SHARED_LINKER_FLAGS="--coverage" \
-            -DCMAKE_EXE_LINKER_FLAGS="--coverage"
-          conda run -p "$HOME/local" cmake --build build --parallel
-          conda run -p "$HOME/local" ctest --test-dir build -VV --output-on-failure -j4 -E torture
-      - name: Generate coverage
-        shell: bash
-        run: |
-          set -e
-          # Use gcovr for report generation and force a gcov executable
-          # that matches the compiler used for the build.
-          CXX=$(grep '^CMAKE_CXX_COMPILER:FILEPATH=' build/CMakeCache.txt | cut -d= -f2-)
-          test -n "$CXX"
-          GCOV=$("$CXX" -print-prog-name=gcov)
-          test -n "$GCOV"
-          if test -x "$GCOV"; then
-            :
-          else
-            CXX_DIR=$(dirname "$CXX")
-            if test -x "$CXX_DIR/$GCOV"; then
-              GCOV="$CXX_DIR/$GCOV"
-            else
-              GCOV=$(command -v "$GCOV" || true)
-            fi
-          fi
-          test -n "$GCOV"
-          test -x "$GCOV"
-          echo "Using gcov tool: $GCOV"
-          "$GCOV" --version
-          # Work around known gcov negative-hit bug (GCC bug 68080)
-          # that can otherwise make gcovr fail the job.
-          conda run -p "$HOME/local" gcovr \
-            --root "$PWD" \
-            --object-directory build \
-            --gcov-executable "$GCOV" \
-            --gcov-ignore-parse-errors negative_hits.warn_once_per_file \
-            --exclude 'tests/.*' \
-            --exclude 'build/.*' \
-            --lcov coverage.info \
-            --xml coverage.xml \
-            --print-summary
-          test -s coverage.info
-          test -s coverage.xml
-          test "$(grep -c '^SF:' coverage.info || true)" -gt 0
+        run: bash tools/gha_conda_coverage_docs.sh
       - name: Upload coverage report
         uses: codecov/codecov-action@v5
         with:
-          files: coverage.info,coverage.xml
+          files: ./build/coverage.info
           disable_search: true
           token: ${{ secrets.CODECOV_TOKEN }}
           fail_ci_if_error: true
@@ -186,25 +125,8 @@ jobs:
         with:
           name: coverage-reports
           path: |
-            coverage.info
-            coverage.xml
+            build/coverage.info
           if-no-files-found: warn
-      - name: Build Doxygen XML
-        shell: bash
-        run: |
-          set -e
-          cd doc/doxygen
-          conda run -p "$HOME/local" doxygen
-          cp images/* xml/
-      - name: Build Sphinx docs
-        shell: bash
-        run: |
-          set -e
-          cd doc/sphinx
-          conda run -p "$HOME/local" make html
-          if ! conda run -p "$HOME/local" make linkcheck; then
-            echo "Warning: Sphinx linkcheck failed (likely transient external outage); continuing."
-          fi
       - name: Deploy to GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/master'
         uses: JamesIves/github-pages-deploy-action@v4
