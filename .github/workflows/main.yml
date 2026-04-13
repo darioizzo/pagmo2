@@ -157,12 +157,12 @@ jobs:
           test -x "$GCOV"
           echo "Using gcov tool: $GCOV"
           "$GCOV" --version
+          # Work around known gcov negative-hit bug (GCC bug 68080)
+          # that can otherwise make gcovr fail the job.
           conda run -p "$HOME/local" gcovr \
             --root "$PWD" \
             --object-directory build \
             --gcov-executable "$GCOV" \
-            # Work around known gcov negative-hit bug (GCC bug 68080)
-            # that can otherwise make gcovr fail the job.
             --gcov-ignore-parse-errors negative_hits.warn_once_per_file \
             --exclude 'tests/.*' \
             --exclude 'build/.*' \
